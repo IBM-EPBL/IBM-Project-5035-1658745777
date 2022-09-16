@@ -4,7 +4,7 @@ Finance app makes your life easier by helping you to manage your finances effici
 finance app will not only help you with budgeting and accounting but also give you helpful insights about money management.
 
 ## Team Members
-GUHAN B - 2019503015
-THILAKSURYA B - 2019503057
-SANJIV PRAKASH J V - 2019503557
-SUHRUTH K C - 2019503566
+GUHAN B - 2019503015 <br>
+THILAKSURYA B - 2019503057 <br>
+SANJIV PRAKASH J V - 2019503557 <br>
+SUHRUTH K C - 2019503566 <br>
