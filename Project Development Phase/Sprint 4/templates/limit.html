@@ -2,14 +2,14 @@
 
 {% block body %} 
 
-<p> Currently your MONTHLY limit is ₹ {{y}} </p>
+<p> CURRENT MONTHLY LIMIT: ₹ {{y}} </p>
 
 
 <form action="/limitnum" method="POST">
 
-    <p> ENTER the MONTHLY LIMIT to avoid over EXPENSES</p> <br/>
+    <p> To avoid over expenses, ENTER THE MONTHLY LIMIT: </p> <br/>
     <input type="number" name="number" required/> <span> 
-        <button class="btn btn-warning" type="submit">ENTER</button>
+        <button class="btn btn-warning" type="submit" style="background-color:rgb(206, 101, 206)">ENTER</button>
     </span>
     
 

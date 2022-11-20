@@ -1,248 +1,502 @@
-from flask import Flask, render_template, request, redirect, url_for
-from flask_mail import Mail, Message
-from datetime import datetime
-from flask_cors import CORS, cross_origin
+import os
 import ibm_db
+import re
+import ibm_db_dbi
 
-app = Flask(__name__, template_folder = 'templates')
-app.config['SECRET_KEY'] = 'top-secret!'
-app.config['MAIL_SERVER'] = 'smtp.sendgrid.net'
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'apikey'
-app.config['MAIL_PASSWORD'] = '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'
-app.config['MAIL_DEFAULT_SENDER'] = 'bkguhan2001@gmail.com'
-mail = Mail(app)
-cors = CORS(app)
-app.config['CORS_HEADERS'] = 'Content-Type'
+from flask import Flask, render_template, request, redirect, session 
+from flask_db2 import DB2
 
-# GLobal variables
-EMAIL=''
-USERID=''
+app = Flask(__name__)
 
-conn=ibm_db.connect("DATABASE=bludb;HOSTNAME=2f3279a5-73d1-4859-88f0-a6c3e6b4b907.c3n41cmd0nqnrk39u98g.databases.appdomain.cloud;PORT=30756;Security=SSL;SSLServerCertificate=DigiCertGlobalRootCA.crt;UID=ctb99199;PWD=GybYxLw1rHz86oSh;","","")
+app.secret_key = 'a'
+  
+app.config['database'] = 'bludb'
+app.config['hostname'] = 'fbd88901-ebdb-4a4f-a32e-9822b9fb237b.c1ogj3sd0tgtu0lqde00.databases.appdomain.cloud'
+app.config['port'] = '32731'
+app.config['protocol'] = 'tcpip'
+app.config['uid'] = 'qdp46216'
+app.config['pwd'] = 'MGhHNGxutNYPFPfE'
+app.config['security'] = 'SSL'
 
-def fetch_walletamount():
-    sql = 'SELECT WALLET FROM PETA_USER WHERE EMAIL=?'
-    stmt = ibm_db.prepare(conn, sql)
-    ibm_db.bind_param(stmt, 1, EMAIL)
-    ibm_db.execute(stmt)
-    user =ibm_db.fetch_assoc(stmt)
-    print(user['WALLET'])
-    return user['WALLET'] #returns int
- 
-def fetch_categories():
 
-    sql = 'SELECT * FROM PETA_CATEGORY WHERE USERID = ?'
-    stmt = ibm_db.prepare(conn,sql)
-    ibm_db.bind_param(stmt,1,USERID)
-    ibm_db.execute(stmt)
+try:
+    mysql = DB2(app)
 
-    categories = []
-    while ibm_db.fetch_row(stmt) != False:
-        categories.append([ibm_db.result(stmt, "CATEGORYID"), ibm_db.result(stmt, "CATEGORY_NAME")])
+    conn_str = 'database=bludb;hostname=fbd88901-ebdb-4a4f-a32e-9822b9fb237b.c1ogj3sd0tgtu0lqde00.databases.appdomain.cloud;port=32731;protocol=tcpip;uid=qdp46216;pwd=MGhHNGxutNYPFPfE;security=SSL'
+            
+    ibm_db_conn = ibm_db.connect(conn_str,'','')
+except Exception as e:
+    print("IBM DB Connection error:", e)    
 
-    sql = 'SELECT * FROM PETA_CATEGORY WHERE USERID IS NULL'
-    stmt = ibm_db.prepare(conn,sql)
-    ibm_db.execute(stmt)
 
-    while ibm_db.fetch_row(stmt) != False:
-        categories.append([ibm_db.result(stmt, "CATEGORYID"), ibm_db.result(stmt, "CATEGORY_NAME")])
+@app.route("/home")
+def home():
+    return render_template("homepage.html")
 
-    print(categories)
-    return categories # returns list 
+@app.route("/")
+def add():
+    return render_template("home.html")
 
-def fetch_userID():
-    sql = 'SELECT USERID FROM PETA_USER WHERE EMAIL=?'
-    stmt = ibm_db.prepare(conn, sql)
-    ibm_db.bind_param(stmt, 1, EMAIL)
-    ibm_db.execute(stmt)
-    user=ibm_db.fetch_assoc(stmt)
-    print(user['USERID'])
-    return user['USERID'] # returns int 
+@app.route("/signup")
+def signup():
+    return render_template("signup.html")
 
-def fetch_groups():
-    sql = 'SELECT * FROM PETA_GROUPS'
-    stmt = ibm_db.exec_immediate(conn, sql)
-    groups = []
-    while ibm_db.fetch_row(stmt) != False:
-        groups.append([ibm_db.result(stmt, "GROUPID"), ibm_db.result(stmt, "GROUPNAME")])
-    print(groups)
-    return groups # returns list 
+@app.route('/register', methods =['GET', 'POST'])
+def register():
+    msg = ''
+    print("Break point1")
+    if request.method == 'POST' :
+        username = request.form['username']
+        email = request.form['email']
+        password = request.form['password']
 
-def fetch_expenses() : 
-    sql = 'SELECT * FROM PETA_EXPENSE where USERID = ' + str(USERID)
-    print(sql)
-    stmt = ibm_db.exec_immediate(conn, sql)
-    expenses = []
-    while ibm_db.fetch_row(stmt) != False:
-        category_id = ibm_db.result(stmt, "CATEGORYID")
-        category_id = str(category_id)
-        sql2 = "SELECT * FROM PETA_CATEGORY WHERE CATEGORYID = " + category_id
-        stmt2 = ibm_db.exec_immediate(conn, sql2)
-        category_name = ""
-        while ibm_db.fetch_row(stmt2) != False :
-            category_name = ibm_db.result(stmt2, "CATEGORY_NAME")
-        expenses.append([ibm_db.result(stmt, "EXPENSE_AMOUNT"), ibm_db.result(stmt, "DATE"), ibm_db.result(stmt, "DESCRIPTION"), category_name])
-    print(expenses)
-    return expenses
-
-@app.route('/', methods=['GET', 'POST'])
-@cross_origin()
-def registration():
-    if request.method=='GET':
-        return render_template('registration.html')
-    if request.method=='POST':
-        email=request.form['email']
-        EMAIL=email
-        password=request.form['password'] 
-        wallet=request.form['wallet']   
-        sql="INSERT INTO PETA_USER(EMAIL,PASSWORD,WALLET) VALUES(?,?,?)"
-        stmt=ibm_db.prepare(conn,sql)
-        ibm_db.bind_param(stmt,1,email)
-        ibm_db.bind_param(stmt,2,password)
-        ibm_db.bind_param(stmt,3,wallet)
+        try:
+            connectionID = ibm_db_dbi.connect(conn_str, '', '')
+            cursor = connectionID.cursor()
+        except:
+            print("No connection Established")      
+        
+        sql = "SELECT * FROM register WHERE username = ?"
+        stmt = ibm_db.prepare(ibm_db_conn, sql)
+        ibm_db.bind_param(stmt, 1, username)
         ibm_db.execute(stmt)
-        msg = Message('Registration Verfication',recipients=[email])
-        msg.body = ('Congratulations! Welcome user!')
-        msg.html = ('<h1>Registration Verfication</h1>'
-                    '<p>Congratulations! Welcome user!' 
-                    '<b>PETA</b>!</p>')
-        mail.send(msg)
-        EMAIL = email
-    return redirect(url_for('dashboard'))
-
-@app.route('/login',methods=['GET','POST'])
-def login():
-    global EMAIL
-    if request.method=='POST':
-        email=request.form['email']
-        EMAIL=email
-        password=request.form['password']
-        sql="SELECT * FROM PETA_USER WHERE email=? AND password=?"
-        stmt=ibm_db.prepare(conn,sql)
-        ibm_db.bind_param(stmt,1,email)
-        ibm_db.bind_param(stmt,2,password)
-        ibm_db.execute(stmt)
-        account=ibm_db.fetch_assoc(stmt)
-        print(account)
+        result = ibm_db.execute(stmt)
+        account = ibm_db.fetch_row(stmt)
+        param = "SELECT * FROM register WHERE username = " + "\'" + username + "\'"
+        res = ibm_db.exec_immediate(ibm_db_conn, param)
+        dictionary = ibm_db.fetch_assoc(res)
+        
+        while dictionary != False:
+            dictionary = ibm_db.fetch_assoc(res) 
+        
         if account:
-            return redirect(url_for('dashboard'))
+            msg = 'Username already exists !'
+        elif not re.match(r'[^@]+@[^@]+\.[^@]+', email):
+            msg = 'Invalid email address !'
+        elif not re.match(r'[A-Za-z0-9]+', username):
+            msg = 'name must contain only characters and numbers !'
         else:
-            return redirect(url_for('login'))
-    elif request.method=='GET':
-        return render_template('login.html')
+            sql2 = "INSERT INTO register (username, email,password) VALUES (?, ?, ?)"
+            stmt2 = ibm_db.prepare(ibm_db_conn, sql2)
+            ibm_db.bind_param(stmt2, 1, username)
+            ibm_db.bind_param(stmt2, 2, email)
+            ibm_db.bind_param(stmt2, 3, password)
+            ibm_db.execute(stmt2)
+            msg = 'You have successfully registered !'
+            
+        return render_template('signup.html', msg = msg)
+            
+@app.route("/signin")
+def signin():
+    return render_template("login.html")
+        
+@app.route('/login',methods =['GET', 'POST'])
+def login():
+    global userid
+    msg = ''
+  
+    if request.method == 'POST' :
+        username = request.form['username']
+        password = request.form['password']        
+        sql = "SELECT * FROM register WHERE username = ? and password = ?"
+        stmt = ibm_db.prepare(ibm_db_conn, sql)
+        ibm_db.bind_param(stmt, 1, username)
+        ibm_db.bind_param(stmt, 2, password)
+        result = ibm_db.execute(stmt)
+        account = ibm_db.fetch_row(stmt)
 
-@app.route('/dashboard', methods=['GET'])
-def dashboard():
-    global USERID
-    global EMAIL
-    if USERID=='' and EMAIL=='':
-        return render_template('login.html')
-    elif USERID=='':
-        USERID=fetch_userID()
+        param = "SELECT * FROM register WHERE username = " + "\'" + username + "\'" + " and password = " + "\'" + password + "\'"
+        res = ibm_db.exec_immediate(ibm_db_conn, param)
+        dictionary = ibm_db.fetch_assoc(res)
+
+        if account:
+            session['loggedin'] = True
+            session['id'] = dictionary["ID"]
+            userid = dictionary["ID"]
+            session['username'] = dictionary["USERNAME"]
+            session['email'] = dictionary["EMAIL"]
+           
+            return redirect('/home')
+        else:
+            msg = 'Incorrect username / password !'
+        
+    return render_template('login.html', msg = msg)
+
+@app.route("/add")
+def adding():
+    return render_template('add.html')
+
+@app.route('/addexpense',methods=['GET', 'POST'])
+def addexpense():
+    date = request.form['date']
+    expensename = request.form['expensename']
+    amount = request.form['amount']
+    paymode = request.form['paymode']
+    category = request.form['category']
+    p1 = date[0:10]
+    p2 = date[11:13]
+    p3 = date[14:]
+    p4 = p1 + "-" + p2 + "." + p3 + ".00"
+    sql = "INSERT INTO expenses (userid, date, expensename, amount, paymode, category) VALUES (?, ?, ?, ?, ?, ?)"
+    stmt = ibm_db.prepare(ibm_db_conn, sql)
+    ibm_db.bind_param(stmt, 1, session['id'])
+    ibm_db.bind_param(stmt, 2, p4)
+    ibm_db.bind_param(stmt, 3, expensename)
+    ibm_db.bind_param(stmt, 4, amount)
+    ibm_db.bind_param(stmt, 5, paymode)
+    ibm_db.bind_param(stmt, 6, category)
+    ibm_db.execute(stmt)
+
+    param = "SELECT * FROM expenses WHERE userid = " + str(session['id']) + " AND MONTH(date) = MONTH(current timestamp) AND YEAR(date) = YEAR(current timestamp) ORDER BY date DESC"
+    res = ibm_db.exec_immediate(ibm_db_conn, param)
+    dictionary = ibm_db.fetch_assoc(res)
+    expense = []
+    while dictionary != False:
+        temp = []
+        temp.append(dictionary["ID"])
+        temp.append(dictionary["USERID"])
+        temp.append(dictionary["DATE"])
+        temp.append(dictionary["EXPENSENAME"])
+        temp.append(dictionary["AMOUNT"])
+        temp.append(dictionary["PAYMODE"])
+        temp.append(dictionary["CATEGORY"])
+        expense.append(temp)
+        print(temp)
+        dictionary = ibm_db.fetch_assoc(res)
+
+    total=0
+    for x in expense:
+          total += x[4]
+
+    param = "SELECT id, limitss FROM limits WHERE userid = " + str(session['id']) + " ORDER BY id DESC LIMIT 1"
+    res = ibm_db.exec_immediate(ibm_db_conn, param)
+    dictionary = ibm_db.fetch_assoc(res)
+    row = []
+    s = 0
+    while dictionary != False:
+        temp = []
+        temp.append(dictionary["LIMITSS"])
+        row.append(temp)
+        dictionary = ibm_db.fetch_assoc(res)
+        s = temp[0]
+
+    if total > int(s):
+        msg = "Hello " + session['username'] + " , " + "you have crossed the monthly limit of Rs. " + str(s) + "/- !!!" + "\n" + "Thank you, " + "\n" + "Team Personal Expense Tracker."  
+        # sendmail(msg,session['email'])  
     
-    expenses = fetch_expenses()
-    wallet = fetch_walletamount()
-    return render_template('dashboard.html', expenses = expenses, wallet = wallet, email = EMAIL)
+    return redirect("/display")
+
+@app.route("/display")
+def display():
+    param = "SELECT * FROM expenses WHERE userid = " + str(session['id']) + " ORDER BY date DESC"
+    res = ibm_db.exec_immediate(ibm_db_conn, param)
+    dictionary = ibm_db.fetch_assoc(res)
+    expense = []
+    while dictionary != False:
+        temp = []
+        temp.append(dictionary["ID"])
+        temp.append(dictionary["USERID"])
+        temp.append(dictionary["DATE"])
+        temp.append(dictionary["EXPENSENAME"])
+        temp.append(dictionary["AMOUNT"])
+        temp.append(dictionary["PAYMODE"])
+        temp.append(dictionary["CATEGORY"])
+        expense.append(temp)
+        dictionary = ibm_db.fetch_assoc(res)
+
+    return render_template('display.html' ,expense = expense)
+
+@app.route('/delete/<string:id>', methods = ['POST', 'GET' ])
+def delete(id):
+    param = "DELETE FROM expenses WHERE  id = " + id
+    res = ibm_db.exec_immediate(ibm_db_conn, param)
+    return redirect("/display")
+
+@app.route('/edit/<id>', methods = ['POST', 'GET' ])
+def edit(id):
+    param = "SELECT * FROM expenses WHERE  id = " + id
+    res = ibm_db.exec_immediate(ibm_db_conn, param)
+    dictionary = ibm_db.fetch_assoc(res)
+    row = []
+    while dictionary != False:
+        temp = []
+        temp.append(dictionary["ID"])
+        temp.append(dictionary["USERID"])
+        temp.append(dictionary["DATE"])
+        temp.append(dictionary["EXPENSENAME"])
+        temp.append(dictionary["AMOUNT"])
+        temp.append(dictionary["PAYMODE"])
+        temp.append(dictionary["CATEGORY"])
+        row.append(temp)
+        dictionary = ibm_db.fetch_assoc(res)
+
+    return render_template('edit.html', expenses = row[0])
+
+
+@app.route('/update/<id>', methods = ['POST'])
+def update(id):
+  if request.method == 'POST' :
+   
+      date = request.form['date']
+      expensename = request.form['expensename']
+      amount = request.form['amount']
+      paymode = request.form['paymode']
+      category = request.form['category']
+
+      p1 = date[0:10]
+      p2 = date[11:13]
+      p3 = date[14:]
+      p4 = p1 + "-" + p2 + "." + p3 + ".00"
+
+      sql = "UPDATE expenses SET date = ?, expensename = ? , amount = ?, paymode = ?, category = ? WHERE id = ?"
+      stmt = ibm_db.prepare(ibm_db_conn, sql)
+      ibm_db.bind_param(stmt, 1, p4)
+      ibm_db.bind_param(stmt, 2, expensename)
+      ibm_db.bind_param(stmt, 3, amount)
+      ibm_db.bind_param(stmt, 4, paymode)
+      ibm_db.bind_param(stmt, 5, category)
+      ibm_db.bind_param(stmt, 6, id)
+      ibm_db.execute(stmt)
+
+      print('successfully updated')
+      return redirect("/display")
+     
+@app.route("/limit")
+def limit():
+       return redirect('/limitn')
+
+@app.route("/limitnum" , methods = ['POST' ])
+def limitnum():
+     if request.method == "POST":
+         number= request.form['number']
+         sql = "INSERT INTO limits (userid, limitss) VALUES (?, ?)"
+         stmt = ibm_db.prepare(ibm_db_conn, sql)
+         ibm_db.bind_param(stmt, 1, session['id'])
+         ibm_db.bind_param(stmt, 2, number)
+         ibm_db.execute(stmt)
+         
+         return redirect('/limitn')
+
+
+@app.route("/limitn") 
+def limitn():    
+    param = "SELECT id, limitss FROM limits WHERE userid = " + str(session['id']) + " ORDER BY id DESC LIMIT 1"
+    res = ibm_db.exec_immediate(ibm_db_conn, param)
+    dictionary = ibm_db.fetch_assoc(res)
+    row = []
+    s = " /-"
+    while dictionary != False:
+        temp = []
+        temp.append(dictionary["LIMITSS"])
+        row.append(temp)
+        dictionary = ibm_db.fetch_assoc(res)
+        s = temp[0]
+    
+    return render_template("limit.html" , y= s)
+
+
+@app.route("/today")
+def today():
+      param1 = "SELECT TIME(date) as tn, amount FROM expenses WHERE userid = " + str(session['id']) + " AND DATE(date) = DATE(current timestamp) ORDER BY date DESC"
+      res1 = ibm_db.exec_immediate(ibm_db_conn, param1)
+      dictionary1 = ibm_db.fetch_assoc(res1)
+      texpense = []
+
+      while dictionary1 != False:
+          temp = []
+          temp.append(dictionary1["TN"])
+          temp.append(dictionary1["AMOUNT"])
+          texpense.append(temp)
+          dictionary1 = ibm_db.fetch_assoc(res1)
       
-@app.route('/updatebalance', methods=['GET','POST'])
-def update_balance():
-    if request.method == 'GET':
-        wallet = fetch_walletamount()
-        return render_template('updatebalance.html', wallet = wallet)
-    elif request.method == 'POST':
-        global EMAIL
-        global USERID
-        if EMAIL == '':
-            return render_template('login.html', msg='Login before proceeding')
-        if(USERID==''):
-            # get user using email
-            USERID = fetch_userID()
+      param = "SELECT * FROM expenses WHERE userid = " + str(session['id']) + " AND DATE(date) = DATE(current timestamp) ORDER BY date DESC"
+      res = ibm_db.exec_immediate(ibm_db_conn, param)
+      dictionary = ibm_db.fetch_assoc(res)
+      expense = []
+      
+      while dictionary != False:
+          temp = []
+          temp.append(dictionary["ID"])
+          temp.append(dictionary["USERID"])
+          temp.append(dictionary["DATE"])
+          temp.append(dictionary["EXPENSENAME"])
+          temp.append(dictionary["AMOUNT"])
+          temp.append(dictionary["PAYMODE"])
+          temp.append(dictionary["CATEGORY"])
+          expense.append(temp)
+          print(temp)
+          dictionary = ibm_db.fetch_assoc(res)
+
+  
+      total=0
+      t_food=0
+      t_entertainment=0
+      t_business=0
+      t_rent=0
+      t_EMI=0
+      t_other=0
+ 
+     
+      for x in expense:
+          total += x[4]
+          if x[6] == "food":
+              t_food += x[4]
+          elif x[6] == "entertainment":
+              t_entertainment  += x[4]
+          elif x[6] == "business":
+              t_business  += x[4]
+          elif x[6] == "rent":
+              t_rent  += x[4]
+          elif x[6] == "EMI":
+              t_EMI  += x[4]
+          elif x[6] == "other":
+              t_other  += x[4]
+            
+      return render_template("today.html", texpense = texpense, expense = expense,  total = total ,
+                           t_food = t_food,t_entertainment =  t_entertainment,
+                           t_business = t_business,  t_rent =  t_rent, 
+                           t_EMI =  t_EMI,  t_other =  t_other )
+ 
+
+@app.route("/month")
+def month():
+      param1 = "SELECT DATE(date) as dt, SUM(amount) as tot FROM expenses WHERE userid = " + str(session['id']) + " AND MONTH(date) = MONTH(current timestamp) AND YEAR(date) = YEAR(current timestamp) GROUP BY DATE(date) ORDER BY DATE(date)"
+      res1 = ibm_db.exec_immediate(ibm_db_conn, param1)
+      dictionary1 = ibm_db.fetch_assoc(res1)
+      texpense = []
+
+      while dictionary1 != False:
+          temp = []
+          temp.append(dictionary1["DT"])
+          temp.append(dictionary1["TOT"])
+          texpense.append(temp)
+          print(temp)
+          dictionary1 = ibm_db.fetch_assoc(res1)
+      
+      param = "SELECT * FROM expenses WHERE userid = " + str(session['id']) + " AND MONTH(date) = MONTH(current timestamp) AND YEAR(date) = YEAR(current timestamp) ORDER BY date DESC"
+      res = ibm_db.exec_immediate(ibm_db_conn, param)
+      dictionary = ibm_db.fetch_assoc(res)
+      expense = []
+      while dictionary != False:
+          temp = []
+          temp.append(dictionary["ID"])
+          temp.append(dictionary["USERID"])
+          temp.append(dictionary["DATE"])
+          temp.append(dictionary["EXPENSENAME"])
+          temp.append(dictionary["AMOUNT"])
+          temp.append(dictionary["PAYMODE"])
+          temp.append(dictionary["CATEGORY"])
+          expense.append(temp)
+          print(temp)
+          dictionary = ibm_db.fetch_assoc(res)
+
+  
+      total=0
+      t_food=0
+      t_entertainment=0
+      t_business=0
+      t_rent=0
+      t_EMI=0
+      t_other=0
+ 
+     
+      for x in expense:
+          total += x[4]
+          if x[6] == "food":
+              t_food += x[4]
+            
+          elif x[6] == "entertainment":
+              t_entertainment  += x[4]
         
-        new_balance = request.form['balanceupdated']
-        sql = 'UPDATE PETA_USER SET WALLET = ? WHERE USERID = ?'
-        stmt=ibm_db.prepare(conn,sql)
-        ibm_db.bind_param(stmt,1,new_balance)
-        ibm_db.bind_param(stmt,2,USERID)
-        ibm_db.execute(stmt)
+          elif x[6] == "business":
+              t_business  += x[4]
+          elif x[6] == "rent":
+              t_rent  += x[4]
+           
+          elif x[6] == "EMI":
+              t_EMI  += x[4]
+         
+          elif x[6] == "other":
+              t_other  += x[4]
+     
+      return render_template("today.html", texpense = texpense, expense = expense,  total = total ,
+                           t_food = t_food,t_entertainment =  t_entertainment,
+                           t_business = t_business,  t_rent =  t_rent, 
+                           t_EMI =  t_EMI,  t_other =  t_other )
 
-        return redirect(url_for('dashboard'))
-
-
-@app.route('/addcategory', methods=['GET','POST'])
-def add_category():
-    if request.method=='GET':        
-        # categories = fetch_categories()
-        return render_template('addcategory.html')
-    
-    elif request.method=='POST':
-        return render_template('dashboard.html', msg='Added category!')
-
-@app.route('/addgroup', methods=['POST'])
-def add_group():
-    if request.method == 'POST':
-        if USERID == '':
-            return render_template('login.html', msg='Login before proceeding')
-        sql="INSERT INTO PETA_GROUPS(GROUPNAME, USERID) VALUES(?,?)"
-        stmt=ibm_db.prepare(conn,sql)
-        ibm_db.bind_param(stmt,1,request.form['groupname'])
-        ibm_db.bind_param(stmt,2,USERID)
-        ibm_db.execute(stmt)
-        print('here')
-        group_info = {}
-        print(request.form['groupname'])
-        sql = "SELECT * FROM PETA_GROUPS WHERE GROUPNAME=?"
-        stmt=ibm_db.prepare(conn, sql)
-        ibm_db.bind_param(stmt, 1, request.form['groupname'])
-        ibm_db.execute(stmt)
-        group_info = ibm_db.fetch_assoc(stmt)
-        return {"groupID": group_info['GROUPID'],'groupname':group_info['GROUPNAME']}
-
-@app.route('/addexpense', methods=['GET', 'POST'])
-def add_expense():
-    if request.method=='GET':
-        groups = fetch_groups()
-        categories = fetch_categories()
-        if len(categories) == 0:
-            return redirect(url_for('add_category'))
-        return render_template('addexpense.html', categories=categories, groups=groups)
-
-    elif request.method=='POST':
-        global EMAIL
-        global USERID
-        if EMAIL == '':
-            return render_template('login.html', msg='Login before proceeding')
-        if(USERID==''):
-            # get user using email
-            USERID = fetch_userID()
         
-        amount_spent = request.form['amountspent']
-        category_id = request.form.get('category')
-        description = request.form['description']
-        date = request.form['date']
-        groupid = request.form.get('group')
-        print(amount_spent, category_id, description, date, groupid, USERID)
+@app.route("/year")
+def year():
+      param1 = "SELECT MONTH(date) as mn, SUM(amount) as tot FROM expenses WHERE userid = " + str(session['id']) + " AND YEAR(date) = YEAR(current timestamp) GROUP BY MONTH(date) ORDER BY MONTH(date)"
+      res1 = ibm_db.exec_immediate(ibm_db_conn, param1)
+      dictionary1 = ibm_db.fetch_assoc(res1)
+      texpense = []
 
-        sql="INSERT INTO PETA_EXPENSE(USERID, EXPENSE_AMOUNT, CATEGORYID, GROUPID, DESCRIPTION, DATE) VALUES(?,?,?,?,?,?)"
-        stmt=ibm_db.prepare(conn,sql)
-        ibm_db.bind_param(stmt,1,USERID)
-        ibm_db.bind_param(stmt,2,amount_spent)
-        ibm_db.bind_param(stmt,3,category_id)
-        ibm_db.bind_param(stmt,4,groupid)
-        ibm_db.bind_param(stmt,5,description)
-        ibm_db.bind_param(stmt,6,date)
-        ibm_db.execute(stmt)
+      while dictionary1 != False:
+          temp = []
+          temp.append(dictionary1["MN"])
+          temp.append(dictionary1["TOT"])
+          texpense.append(temp)
+          print(temp)
+          dictionary1 = ibm_db.fetch_assoc(res1)
+      
+      param = "SELECT * FROM expenses WHERE userid = " + str(session['id']) + " AND YEAR(date) = YEAR(current timestamp) ORDER BY date DESC"
+      res = ibm_db.exec_immediate(ibm_db_conn, param)
+      dictionary = ibm_db.fetch_assoc(res)
+      expense = []
+      while dictionary != False:
+          temp = []
+          temp.append(dictionary["ID"])
+          temp.append(dictionary["USERID"])
+          temp.append(dictionary["DATE"])
+          temp.append(dictionary["EXPENSENAME"])
+          temp.append(dictionary["AMOUNT"])
+          temp.append(dictionary["PAYMODE"])
+          temp.append(dictionary["CATEGORY"])
+          expense.append(temp)
+          print(temp)
+          dictionary = ibm_db.fetch_assoc(res)
 
-        sql = "UPDATE PETA_USER SET WALLET = WALLET - ? WHERE USERID = ?";
-        statement = ibm_db.prepare(conn, sql)
-        ibm_db.bind_param(statement, 1, amount_spent)
-        ibm_db.bind_param(statement, 2, USERID)
-        ibm_db.execute(statement)
-    
-        return redirect(url_for('dashboard'))
-        # return render_template('dashboard.html', msg='Expense added!')
+  
+      total=0
+      t_food=0
+      t_entertainment=0
+      t_business=0
+      t_rent=0
+      t_EMI=0
+      t_other=0
+ 
+     
+      for x in expense:
+          total += x[4]
+          if x[6] == "food":
+              t_food += x[4]
+          elif x[6] == "entertainment":
+              t_entertainment  += x[4]
+          elif x[6] == "business":
+              t_business  += x[4]
+          elif x[6] == "rent":
+              t_rent  += x[4]  
+          elif x[6] == "EMI":
+              t_EMI  += x[4]
+          elif x[6] == "other":
+              t_other  += x[4]
+     
+      return render_template("today.html", texpense = texpense, expense = expense,  total = total ,
+                           t_food = t_food,t_entertainment =  t_entertainment,
+                           t_business = t_business,  t_rent =  t_rent, 
+                           t_EMI =  t_EMI,  t_other =  t_other )
 
-if __name__=='__main__':
-    app.run(host='0.0.0.0', debug=True)
-    
+@app.route('/logout')
+def logout():
+   session.pop('loggedin', None)
+   session.pop('id', None)
+   session.pop('username', None)
+   session.pop('email', None)
+   return render_template('home.html')
+
+             
+port = os.getenv('VCAP_APP_PORT', '8080')
+if __name__ == "__main__":
+    app.secret_key = os.urandom(12)
+    app.run(debug=True, host='0.0.0.0', port=port)

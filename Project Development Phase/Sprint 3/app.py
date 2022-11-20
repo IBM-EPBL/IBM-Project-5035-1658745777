@@ -1,36 +1,33 @@
+import os
+import ibm_db
+import re
+import ibm_db_dbi
 
 from flask import Flask, render_template, request, redirect, session 
-import re
-
 from flask_db2 import DB2
-import ibm_db
-import ibm_db_dbi
-from sendemail import sendgridmail,sendmail
-
-import os
-
 
 app = Flask(__name__)
 
 app.secret_key = 'a'
-
+  
 app.config['database'] = 'bludb'
-app.config['hostname'] = 'ba99a9e6-d59e-4883-8fc0-d6a8c9f7a08f.c1ogj3sd0tgtu0lqde00.databases.appdomain.cloud'
-app.config['port'] = '31321'
+app.config['hostname'] = 'fbd88901-ebdb-4a4f-a32e-9822b9fb237b.c1ogj3sd0tgtu0lqde00.databases.appdomain.cloud'
+app.config['port'] = '32731'
 app.config['protocol'] = 'tcpip'
-app.config['uid'] = 'gtss08423'
-app.config['pwd'] = '5Lo4fJGDtPdbIWy'
+app.config['uid'] = 'qdp46216'
+app.config['pwd'] = 'MGhHNGxutNYPFPfE'
 app.config['security'] = 'SSL'
+
+
 try:
     mysql = DB2(app)
 
-    conn_str='database=bludb;hostname=ba99a9e6-d59e-4883-8fc0-d6a8c9f7a08f.c1ogj3sd0tgtu0lqde00.databases.appdomain.cloud;port=31321;protocol=tcpip;\
-            uid=vmk08423;pwd=3KfJl6HGDtPdbIWy;security=SSL'
+    conn_str = 'database=bludb;hostname=fbd88901-ebdb-4a4f-a32e-9822b9fb237b.c1ogj3sd0tgtu0lqde00.databases.appdomain.cloud;port=32731;protocol=tcpip;uid=qdp46216;pwd=MGhHNGxutNYPFPfE;security=SSL'
+            
     ibm_db_conn = ibm_db.connect(conn_str,'','')
-        
-    print("Database connected without any error !!")
-except:
-    print("IBM DB Connection error   :     " + DB2.conn_errormsg())    
+except Exception as e:
+    print("IBM DB Connection error:", e)    
+
 
 @app.route("/home")
 def home():
@@ -40,14 +37,9 @@ def home():
 def add():
     return render_template("home.html")
 
-
-
-
 @app.route("/signup")
 def signup():
     return render_template("signup.html")
-
-
 
 @app.route('/register', methods =['GET', 'POST'])
 def register():
@@ -58,34 +50,25 @@ def register():
         email = request.form['email']
         password = request.form['password']
 
-        print("Break point2" + "name: " + username + "------" + email + "------" + password)
-
         try:
-            print("Break point3")
             connectionID = ibm_db_dbi.connect(conn_str, '', '')
             cursor = connectionID.cursor()
-            print("Break point4")
         except:
             print("No connection Established")      
-        print("Break point5")
+        
         sql = "SELECT * FROM register WHERE username = ?"
         stmt = ibm_db.prepare(ibm_db_conn, sql)
         ibm_db.bind_param(stmt, 1, username)
         ibm_db.execute(stmt)
         result = ibm_db.execute(stmt)
-        print(result)
         account = ibm_db.fetch_row(stmt)
-        print(account)
-
         param = "SELECT * FROM register WHERE username = " + "\'" + username + "\'"
         res = ibm_db.exec_immediate(ibm_db_conn, param)
-        print("---- ")
         dictionary = ibm_db.fetch_assoc(res)
+        
         while dictionary != False:
-            print("The ID is : ", dictionary["USERNAME"])
-            dictionary = ibm_db.fetch_assoc(res)
-   
-        print("break point 6")
+            dictionary = ibm_db.fetch_assoc(res) 
+        
         if account:
             msg = 'Username already exists !'
         elif not re.match(r'[^@]+@[^@]+\.[^@]+', email):
@@ -100,8 +83,9 @@ def register():
             ibm_db.bind_param(stmt2, 3, password)
             ibm_db.execute(stmt2)
             msg = 'You have successfully registered !'
+            
         return render_template('signup.html', msg = msg)
-    
+            
 @app.route("/signin")
 def signin():
     return render_template("login.html")
@@ -110,21 +94,17 @@ def signin():
 def login():
     global userid
     msg = ''
-   
   
     if request.method == 'POST' :
         username = request.form['username']
-        password = request.form['password']
-
+        password = request.form['password']        
         sql = "SELECT * FROM register WHERE username = ? and password = ?"
         stmt = ibm_db.prepare(ibm_db_conn, sql)
         ibm_db.bind_param(stmt, 1, username)
         ibm_db.bind_param(stmt, 2, password)
         result = ibm_db.execute(stmt)
-        print(result)
         account = ibm_db.fetch_row(stmt)
-        print(account)
-        
+
         param = "SELECT * FROM register WHERE username = " + "\'" + username + "\'" + " and password = " + "\'" + password + "\'"
         res = ibm_db.exec_immediate(ibm_db_conn, param)
         dictionary = ibm_db.fetch_assoc(res)
@@ -146,23 +126,17 @@ def login():
 def adding():
     return render_template('add.html')
 
-
 @app.route('/addexpense',methods=['GET', 'POST'])
 def addexpense():
-    
     date = request.form['date']
     expensename = request.form['expensename']
     amount = request.form['amount']
     paymode = request.form['paymode']
     category = request.form['category']
-
-    print(date)
     p1 = date[0:10]
     p2 = date[11:13]
     p3 = date[14:]
     p4 = p1 + "-" + p2 + "." + p3 + ".00"
-    print(p4)
-
     sql = "INSERT INTO expenses (userid, date, expensename, amount, paymode, category) VALUES (?, ?, ?, ?, ?, ?)"
     stmt = ibm_db.prepare(ibm_db_conn, sql)
     ibm_db.bind_param(stmt, 1, session['id'])
@@ -172,8 +146,6 @@ def addexpense():
     ibm_db.bind_param(stmt, 5, paymode)
     ibm_db.bind_param(stmt, 6, category)
     ibm_db.execute(stmt)
-
-    print("Expenses added")
 
     param = "SELECT * FROM expenses WHERE userid = " + str(session['id']) + " AND MONTH(date) = MONTH(current timestamp) AND YEAR(date) = YEAR(current timestamp) ORDER BY date DESC"
     res = ibm_db.exec_immediate(ibm_db_conn, param)
@@ -209,15 +181,13 @@ def addexpense():
         s = temp[0]
 
     if total > int(s):
-        msg = "Hello " + session['username'] + " , " + "you have crossed the monthly limit of Rs. " + s + "/- !!!" + "\n" + "Thank you, " + "\n" + "Team Personal Expense Tracker."  
-        sendmail(msg,session['email'])  
+        msg = "Hello " + session['username'] + " , " + "you have crossed the monthly limit of Rs. " + str(s) + "/- !!!" + "\n" + "Thank you, " + "\n" + "Team Personal Expense Tracker."  
+        # sendmail(msg,session['email'])  
     
     return redirect("/display")
 
 @app.route("/display")
 def display():
-    print(session["username"],session['id'])
-
     param = "SELECT * FROM expenses WHERE userid = " + str(session['id']) + " ORDER BY date DESC"
     res = ibm_db.exec_immediate(ibm_db_conn, param)
     dictionary = ibm_db.fetch_assoc(res)
@@ -232,24 +202,18 @@ def display():
         temp.append(dictionary["PAYMODE"])
         temp.append(dictionary["CATEGORY"])
         expense.append(temp)
-        print(temp)
         dictionary = ibm_db.fetch_assoc(res)
 
     return render_template('display.html' ,expense = expense)
 
-
 @app.route('/delete/<string:id>', methods = ['POST', 'GET' ])
 def delete(id):
-
     param = "DELETE FROM expenses WHERE  id = " + id
     res = ibm_db.exec_immediate(ibm_db_conn, param)
-
-    print('deleted successfully')    
     return redirect("/display")
 
 @app.route('/edit/<id>', methods = ['POST', 'GET' ])
 def edit(id):
-
     param = "SELECT * FROM expenses WHERE  id = " + id
     res = ibm_db.exec_immediate(ibm_db_conn, param)
     dictionary = ibm_db.fetch_assoc(res)
@@ -264,13 +228,9 @@ def edit(id):
         temp.append(dictionary["PAYMODE"])
         temp.append(dictionary["CATEGORY"])
         row.append(temp)
-        print(temp)
         dictionary = ibm_db.fetch_assoc(res)
 
-    print(row[0])
     return render_template('edit.html', expenses = row[0])
-
-
 
 
 @app.route('/update/<id>', methods = ['POST'])
@@ -288,7 +248,7 @@ def update(id):
       p3 = date[14:]
       p4 = p1 + "-" + p2 + "." + p3 + ".00"
 
-      sql = "UPDATE expenses SET date = ? , expensename = ? , amount = ?, paymode = ?, category = ? WHERE id = ?"
+      sql = "UPDATE expenses SET date = ?, expensename = ? , amount = ?, paymode = ?, category = ? WHERE id = ?"
       stmt = ibm_db.prepare(ibm_db_conn, sql)
       ibm_db.bind_param(stmt, 1, p4)
       ibm_db.bind_param(stmt, 2, expensename)
@@ -301,8 +261,7 @@ def update(id):
       print('successfully updated')
       return redirect("/display")
      
-      
-@app.route("/limit" )
+@app.route("/limit")
 def limit():
        return redirect('/limitn')
 
@@ -310,7 +269,6 @@ def limit():
 def limitnum():
      if request.method == "POST":
          number= request.form['number']
-
          sql = "INSERT INTO limits (userid, limitss) VALUES (?, ?)"
          stmt = ibm_db.prepare(ibm_db_conn, sql)
          ibm_db.bind_param(stmt, 1, session['id'])
@@ -318,11 +276,10 @@ def limitnum():
          ibm_db.execute(stmt)
          
          return redirect('/limitn')
-     
-         
+
+
 @app.route("/limitn") 
-def limitn():
-    
+def limitn():    
     param = "SELECT id, limitss FROM limits WHERE userid = " + str(session['id']) + " ORDER BY id DESC LIMIT 1"
     res = ibm_db.exec_immediate(ibm_db_conn, param)
     dictionary = ibm_db.fetch_assoc(res)
@@ -340,7 +297,6 @@ def limitn():
 
 @app.route("/today")
 def today():
-
       param1 = "SELECT TIME(date) as tn, amount FROM expenses WHERE userid = " + str(session['id']) + " AND DATE(date) = DATE(current timestamp) ORDER BY date DESC"
       res1 = ibm_db.exec_immediate(ibm_db_conn, param1)
       dictionary1 = ibm_db.fetch_assoc(res1)
@@ -351,13 +307,13 @@ def today():
           temp.append(dictionary1["TN"])
           temp.append(dictionary1["AMOUNT"])
           texpense.append(temp)
-          print(temp)
           dictionary1 = ibm_db.fetch_assoc(res1)
-
+      
       param = "SELECT * FROM expenses WHERE userid = " + str(session['id']) + " AND DATE(date) = DATE(current timestamp) ORDER BY date DESC"
       res = ibm_db.exec_immediate(ibm_db_conn, param)
       dictionary = ibm_db.fetch_assoc(res)
       expense = []
+      
       while dictionary != False:
           temp = []
           temp.append(dictionary["ID"])
@@ -385,41 +341,25 @@ def today():
           total += x[4]
           if x[6] == "food":
               t_food += x[4]
-            
           elif x[6] == "entertainment":
               t_entertainment  += x[4]
-        
           elif x[6] == "business":
               t_business  += x[4]
           elif x[6] == "rent":
               t_rent  += x[4]
-           
           elif x[6] == "EMI":
               t_EMI  += x[4]
-         
           elif x[6] == "other":
               t_other  += x[4]
             
-      print(total)
-        
-      print(t_food)
-      print(t_entertainment)
-      print(t_business)
-      print(t_rent)
-      print(t_EMI)
-      print(t_other)
-
-
-     
       return render_template("today.html", texpense = texpense, expense = expense,  total = total ,
                            t_food = t_food,t_entertainment =  t_entertainment,
                            t_business = t_business,  t_rent =  t_rent, 
                            t_EMI =  t_EMI,  t_other =  t_other )
-     
+ 
 
 @app.route("/month")
 def month():
-
       param1 = "SELECT DATE(date) as dt, SUM(amount) as tot FROM expenses WHERE userid = " + str(session['id']) + " AND MONTH(date) = MONTH(current timestamp) AND YEAR(date) = YEAR(current timestamp) GROUP BY DATE(date) ORDER BY DATE(date)"
       res1 = ibm_db.exec_immediate(ibm_db_conn, param1)
       dictionary1 = ibm_db.fetch_assoc(res1)
@@ -432,7 +372,7 @@ def month():
           texpense.append(temp)
           print(temp)
           dictionary1 = ibm_db.fetch_assoc(res1)
-
+      
       param = "SELECT * FROM expenses WHERE userid = " + str(session['id']) + " AND MONTH(date) = MONTH(current timestamp) AND YEAR(date) = YEAR(current timestamp) ORDER BY date DESC"
       res = ibm_db.exec_immediate(ibm_db_conn, param)
       dictionary = ibm_db.fetch_assoc(res)
@@ -478,26 +418,15 @@ def month():
          
           elif x[6] == "other":
               t_other  += x[4]
-            
-      print(total)
-        
-      print(t_food)
-      print(t_entertainment)
-      print(t_business)
-      print(t_rent)
-      print(t_EMI)
-      print(t_other)
-
-
      
       return render_template("today.html", texpense = texpense, expense = expense,  total = total ,
                            t_food = t_food,t_entertainment =  t_entertainment,
                            t_business = t_business,  t_rent =  t_rent, 
                            t_EMI =  t_EMI,  t_other =  t_other )
-         
+
+        
 @app.route("/year")
 def year():
-
       param1 = "SELECT MONTH(date) as mn, SUM(amount) as tot FROM expenses WHERE userid = " + str(session['id']) + " AND YEAR(date) = YEAR(current timestamp) GROUP BY MONTH(date) ORDER BY MONTH(date)"
       res1 = ibm_db.exec_immediate(ibm_db_conn, param1)
       dictionary1 = ibm_db.fetch_assoc(res1)
@@ -510,7 +439,7 @@ def year():
           texpense.append(temp)
           print(temp)
           dictionary1 = ibm_db.fetch_assoc(res1)
-
+      
       param = "SELECT * FROM expenses WHERE userid = " + str(session['id']) + " AND YEAR(date) = YEAR(current timestamp) ORDER BY date DESC"
       res = ibm_db.exec_immediate(ibm_db_conn, param)
       dictionary = ibm_db.fetch_assoc(res)
@@ -542,31 +471,16 @@ def year():
           total += x[4]
           if x[6] == "food":
               t_food += x[4]
-            
           elif x[6] == "entertainment":
               t_entertainment  += x[4]
-        
           elif x[6] == "business":
               t_business  += x[4]
           elif x[6] == "rent":
-              t_rent  += x[4]
-           
+              t_rent  += x[4]  
           elif x[6] == "EMI":
               t_EMI  += x[4]
-         
           elif x[6] == "other":
               t_other  += x[4]
-            
-      print(total)
-        
-      print(t_food)
-      print(t_entertainment)
-      print(t_business)
-      print(t_rent)
-      print(t_EMI)
-      print(t_other)
-
-
      
       return render_template("today.html", texpense = texpense, expense = expense,  total = total ,
                            t_food = t_food,t_entertainment =  t_entertainment,
@@ -574,7 +488,6 @@ def year():
                            t_EMI =  t_EMI,  t_other =  t_other )
 
 @app.route('/logout')
-
 def logout():
    session.pop('loggedin', None)
    session.pop('id', None)
