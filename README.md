@@ -6,5 +6,6 @@ finance app will not only help you with budgeting and accounting but also give y
 ## Team Members
 Lead     - GUHAN B            - 2019503015 <br>
 Member 1 - THILAKSURYA B      - 2019503057 <br>
-Member 2 - SUHRUTH K C        - 2019503566 <br>
-Member 3 - SANJIV PRAKASH J V - 2019503557 <br>
+Member 2 - SANJIV PRAKASH J V - 2019503557 <br>
+Member 3 - SUHRUTH K C        - 2019503566 <br>
+
